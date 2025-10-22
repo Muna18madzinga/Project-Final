@@ -3,64 +3,111 @@ import { persist } from 'zustand/middleware'
 import api from '../services/api'
 import toast from 'react-hot-toast'
 
-const defaultUser = {
-  username: import.meta.env.VITE_DEFAULT_USERNAME || 'Theo_Madzinga',
-}
-
 export const useAuthStore = create(
   persist(
     (set, get) => ({
-      user: defaultUser,
+      user: null,
       token: null,
-      isAuthenticated: true,
-      mfaRequired: false,
-      mfaSessionId: null,
+      isAuthenticated: false,
+      loading: false,
+      error: null,
 
       login: async (username, password) => {
-        set({
-          user: { username },
-          token: null,
-          isAuthenticated: true,
-          mfaRequired: false,
-          mfaSessionId: null
-        })
-        return { success: true }
-      },
-
-      verifyMFA: async (code) => {
-        set({
-          mfaRequired: false,
-          mfaSessionId: null
-        })
-        return { success: true }
-      },
-
-      register: async (username, password, email) => {
+        set({ loading: true, error: null })
+        
         try {
-          await api.post('/api/auth/register', { username, password, email })
-            return { success: true }
+          const response = await api.post('/api/auth/login', {
+            username,
+            password
+          })
+          
+          const { access_token, user } = response.data
+          
+          set({
+            user,
+            token: access_token,
+            isAuthenticated: true,
+            loading: false,
+            error: null
+          })
+          
+          toast.success(`Welcome back, ${user.username}!`)
+          return { success: true }
+          
         } catch (error) {
-          throw new Error(error.response?.data?.error || 'Registration failed')
+          const errorMessage = error.response?.data?.error || 'Login failed'
+          set({
+            user: null,
+            token: null,
+            isAuthenticated: false,
+            loading: false,
+            error: errorMessage
+          })
+          
+          toast.error(errorMessage)
+          return { success: false, error: errorMessage }
         }
       },
 
       logout: async () => {
-        toast.success('Signed out of the console')
         set({
-          user: defaultUser,
+          user: null,
           token: null,
-          isAuthenticated: true,
-          mfaRequired: false,
-          mfaSessionId: null
+          isAuthenticated: false,
+          loading: false,
+          error: null
         })
+        
+        toast.success('Logged out successfully')
       },
 
-      refreshToken: async () => {
+      checkAuth: async () => {
         const token = get().token
         if (!token) {
-          return null
+          return false
         }
-        return token
+
+        try {
+          const response = await api.get('/api/auth/me')
+          set({
+            user: response.data,
+            isAuthenticated: true,
+            error: null
+          })
+          return true
+        } catch (error) {
+          set({
+            user: null,
+            token: null,
+            isAuthenticated: false,
+            error: null
+          })
+          return false
+        }
+      },
+
+      clearError: () => {
+        set({ error: null })
+      },
+
+      // Demo mode login (fallback)
+      loginDemo: () => {
+        const demoUser = {
+          id: 1,
+          username: 'demo_user',
+          role: 'admin'
+        }
+        
+        set({
+          user: demoUser,
+          token: 'demo-token',
+          isAuthenticated: true,
+          loading: false,
+          error: null
+        })
+        
+        toast.success('Logged in to demo mode')
+        return { success: true }
       }
     }),
     {
@@ -73,3 +120,11 @@ export const useAuthStore = create(
     }
   )
 )
+
+// Initialize auth check on app load
+if (typeof window !== 'undefined') {
+  const store = useAuthStore.getState()
+  if (store.token) {
+    store.checkAuth()
+  }
+}

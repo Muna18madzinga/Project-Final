@@ -1,287 +1,338 @@
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Monitor, Plus, Usb, Server, RefreshCcw } from 'lucide-react'
-import toast from 'react-hot-toast'
-import PageShell from '../components/PageShell'
+import { 
+  MonitorSmartphone, 
+  Smartphone, 
+  Laptop, 
+  Server, 
+  Router, 
+  Printer,
+  RefreshCw,
+  Search,
+  Filter,
+  MoreVertical,
+  Wifi,
+  WifiOff
+} from 'lucide-react'
 import { componentStyles, typography } from '../styles/designSystem'
 import api from '../services/api'
 
-const initialFormState = {
-  name: '',
-  type: 'Agent',
-  ip: '',
-  mac_address: '',
-  os: 'Windows 11'
-}
-
 export default function DevicesPage() {
   const [devices, setDevices] = useState([])
-  const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [showProvisionForm, setShowProvisionForm] = useState(false)
-  const [form, setForm] = useState(initialFormState)
-  const [submitting, setSubmitting] = useState(false)
-
-  const fetchDevices = async (showIndicator = false) => {
-    try {
-      if (showIndicator) {
-        setLoading(true)
-      }
-      const response = await api.get('network/devices')
-      setDevices(response.data?.devices || [])
-      setSummary(response.data?.summary || null)
-    } catch (error) {
-      toast.error('Unable to load devices')
-      console.error('Failed to fetch devices', error)
-    } finally {
-      if (showIndicator) {
-        setLoading(false)
-      }
-    }
-  }
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [stats, setStats] = useState({
+    total: 0,
+    online: 0,
+    offline: 0,
+    warning: 0
+  })
 
   useEffect(() => {
-    fetchDevices(true)
+    fetchDevices()
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(fetchDevices, 30000)
+    return () => clearInterval(interval)
   }, [])
 
-  const handleInputChange = (event) => {
-    const { name, value } = event.target
-    setForm((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const provisionDevice = async (event) => {
-    event.preventDefault()
-    setSubmitting(true)
+  const fetchDevices = async () => {
     try {
-      const payload = {
-        ...form,
-        enrollment_token: `ENROLL-${Date.now()}`
-      }
-      const response = await api.post('network/devices/provision', payload)
-      toast.success(response.data?.message || 'Device enrolled')
-      setShowProvisionForm(false)
-      setForm(initialFormState)
-      await fetchDevices(true)
+      setLoading(true)
+      const response = await api.get('/api/devices')
+      const deviceData = response.data?.devices || []
+      
+      setDevices(deviceData)
+      
+      // Calculate stats
+      const total = deviceData.length
+      const online = deviceData.filter(d => d.status === 'online').length
+      const offline = deviceData.filter(d => d.status === 'offline').length
+      const warning = deviceData.filter(d => d.status === 'warning').length
+      
+      setStats({ total, online, offline, warning })
+      
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to enroll device')
-      console.error('Failed to provision device', error)
+      console.error('Failed to fetch devices:', error)
     } finally {
-      setSubmitting(false)
+      setLoading(false)
     }
   }
 
-  const statusBadge = (status) => {
-    const normalized = (status || '').toLowerCase()
-    if (normalized === 'active') return componentStyles.badge.success
-    if (normalized === 'suspicious') return componentStyles.badge.warning
-    if (normalized === 'high') return componentStyles.badge.error
-    return componentStyles.badge.info
+  const getDeviceIcon = (type) => {
+    switch (type?.toLowerCase()) {
+      case 'desktop':
+      case 'laptop':
+        return Laptop
+      case 'mobile':
+      case 'smartphone':
+        return Smartphone
+      case 'server':
+        return Server
+      case 'router':
+      case 'switch':
+        return Router
+      case 'printer':
+        return Printer
+      default:
+        return MonitorSmartphone
+    }
+  }
+
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'online':
+        return 'text-green-600 bg-green-100'
+      case 'offline':
+        return 'text-red-600 bg-red-100'
+      case 'warning':
+        return 'text-yellow-600 bg-yellow-100'
+      default:
+        return 'text-gray-600 bg-gray-100'
+    }
+  }
+
+  const getRiskColor = (level) => {
+    switch (level?.toLowerCase()) {
+      case 'high':
+        return 'text-red-600 bg-red-100 border-red-200'
+      case 'medium':
+        return 'text-yellow-600 bg-yellow-100 border-yellow-200'
+      case 'low':
+        return 'text-green-600 bg-green-100 border-green-200'
+      default:
+        return 'text-gray-600 bg-gray-100 border-gray-200'
+    }
+  }
+
+  const formatTimeAgo = (timestamp) => {
+    if (!timestamp) return 'Never'
+    const now = new Date()
+    const time = new Date(timestamp)
+    const diffMs = now - time
+    const diffMins = Math.floor(diffMs / 60000)
+    
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`
+    return `${Math.floor(diffMins / 1440)}d ago`
+  }
+
+  const filteredDevices = devices.filter(device => {
+    const matchesSearch = device.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         device.ip?.includes(searchTerm) ||
+                         device.mac?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         device.type?.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    const matchesFilter = filterStatus === 'all' || device.status === filterStatus
+    
+    return matchesSearch && matchesFilter
+  })
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
   }
 
   return (
-    <PageShell
-      icon={Monitor}
-      title="Connected Devices"
-      description="Manage the collectors, agents, and gateways connected to the platform."
-      actions={
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => fetchDevices(true)}
-            className={`${componentStyles.button.base} ${componentStyles.button.secondary}`}
-          >
-            <RefreshCcw className="w-4 h-4 mr-2" />
-            Refresh
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowProvisionForm(true)}
-            className={`${componentStyles.button.base} ${componentStyles.button.primary}`}
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Add device
-          </button>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className={typography.h1}>Network Devices</h1>
+          <p className={typography.small}>Monitor and manage devices on your network</p>
         </div>
-      }
-    >
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25 }}
-        className={componentStyles.card}
-      >
-        <div className="flex flex-col gap-4">
-          {summary && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {[
-                { label: 'Total devices', value: summary.total_devices },
-                { label: 'Active', value: summary.active_devices },
-                { label: 'High risk', value: summary.high_risk_devices },
-                { label: 'Traffic (KB/s)', value: Math.round((summary.total_traffic || 0) / 1024) }
-              ].map((item) => (
-                <div key={item.label} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                  <p className="text-xs uppercase text-gray-500">{item.label}</p>
-                  <p className="text-lg font-semibold text-gray-900">{item.value}</p>
-                </div>
-              ))}
-            </div>
-          )}
+        <button
+          onClick={fetchDevices}
+          disabled={loading}
+          className={`${componentStyles.button.base} ${componentStyles.button.primary} flex items-center gap-2`}
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500">
-                  <th className="py-3">Name</th>
-                  <th className="py-3">Type</th>
-                  <th className="py-3">Status</th>
-                  <th className="py-3">IP</th>
-                  <th className="py-3">Last seen</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {loading ? (
-                  <tr>
-                    <td className="py-6 text-center text-gray-500" colSpan={5}>
-                      Loading devices...
-                    </td>
-                  </tr>
-                ) : devices.length === 0 ? (
-                  <tr>
-                    <td className="py-6 text-center text-gray-500" colSpan={5}>
-                      No devices discovered yet.
-                    </td>
-                  </tr>
-                ) : (
-                  devices.map((device) => (
-                    <tr key={device.id || device.ip} className="text-gray-700">
-                      <td className="py-3 flex items-center gap-3">
-                        <Server className="w-4 h-4 text-gray-400" />
-                        {device.name}
-                      </td>
-                      <td className="py-3">{device.type}</td>
-                      <td className="py-3">
-                        <span className={`${componentStyles.badge.base} ${statusBadge(device.status)}`}>
-                          {(device.status || 'unknown').toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="py-3 text-gray-600">{device.ip}</td>
-                      <td className="py-3 text-gray-500">{device.last_seen || 'Unknown'}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={componentStyles.card}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className={typography.small}>Total Devices</p>
+              <p className={typography.h3}>{stats.total}</p>
+            </div>
+            <div className={`${componentStyles.statIcon.base} ${componentStyles.statIcon.primary}`}>
+              <MonitorSmartphone className="w-6 h-6" />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className={componentStyles.card}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className={typography.small}>Online</p>
+              <p className={typography.h3}>{stats.online}</p>
+            </div>
+            <div className={`${componentStyles.statIcon.base} ${componentStyles.statIcon.success}`}>
+              <Wifi className="w-6 h-6" />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className={componentStyles.card}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className={typography.small}>Offline</p>
+              <p className={typography.h3}>{stats.offline}</p>
+            </div>
+            <div className={`${componentStyles.statIcon.base} ${componentStyles.statIcon.neutral}`}>
+              <WifiOff className="w-6 h-6" />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className={componentStyles.card}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className={typography.small}>Warnings</p>
+              <p className={typography.h3}>{stats.warning}</p>
+            </div>
+            <div className={`${componentStyles.statIcon.base} ${componentStyles.statIcon.accent}`}>
+              <MonitorSmartphone className="w-6 h-6" />
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Filters and Search */}
+      <div className={componentStyles.card}>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search devices by name, IP, MAC, or type..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-gray-500" />
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 bg-white text-sm"
+            >
+              <option value="all">All Status</option>
+              <option value="online">Online</option>
+              <option value="offline">Offline</option>
+              <option value="warning">Warning</option>
+            </select>
           </div>
         </div>
-      </motion.div>
+      </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className={componentStyles.card}
-      >
-        <div className="flex items-center gap-3 mb-3">
-          <Usb className="w-5 h-5 text-blue-600" />
-          <h2 className={typography.h4}>Provisioning</h2>
+      {/* Devices List */}
+      <div className={componentStyles.card}>
+        <div className="mb-6">
+          <h2 className={typography.h3}>Discovered Devices</h2>
+          <p className={typography.small}>
+            Showing {filteredDevices.length} of {devices.length} devices
+          </p>
         </div>
-        <p className={typography.small}>
-          Device provisioning scripts can be downloaded from the deployment portal. Install the agent, then link it
-          here by entering the provided enrollment token.
-        </p>
-      </motion.div>
 
-      {showProvisionForm && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-lg max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Enroll new device</h2>
-              <button
-                type="button"
-                onClick={() => setShowProvisionForm(false)}
-                className="text-sm text-blue-600 hover:underline"
-              >
-                Cancel
-              </button>
-            </div>
-            <form className="space-y-4" onSubmit={provisionDevice}>
-              <div>
-                <label className="block text-xs uppercase text-gray-500 mb-1">Device name</label>
-                <input
-                  required
-                  name="name"
-                  value={form.name}
-                  onChange={handleInputChange}
-                  className={componentStyles.input.base}
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs uppercase text-gray-500 mb-1">Type</label>
-                  <select
-                    name="type"
-                    value={form.type}
-                    onChange={handleInputChange}
-                    className={componentStyles.input.base}
-                  >
-                    <option value="Agent">Endpoint agent</option>
-                    <option value="Collector">Collector</option>
-                    <option value="Gateway">Gateway</option>
-                    <option value="Sensor">Sensor</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs uppercase text-gray-500 mb-1">Operating system</label>
-                  <input
-                    name="os"
-                    value={form.os}
-                    onChange={handleInputChange}
-                    className={componentStyles.input.base}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs uppercase text-gray-500 mb-1">IPv4 address</label>
-                  <input
-                    name="ip"
-                    value={form.ip}
-                    onChange={handleInputChange}
-                    className={componentStyles.input.base}
-                    placeholder="192.168.1.25"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs uppercase text-gray-500 mb-1">MAC address</label>
-                  <input
-                    name="mac_address"
-                    value={form.mac_address}
-                    onChange={handleInputChange}
-                    className={componentStyles.input.base}
-                    placeholder="00-11-22-33-44-55"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowProvisionForm(false)}
-                  className={`${componentStyles.button.base} ${componentStyles.button.secondary}`}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className={`${componentStyles.button.base} ${componentStyles.button.primary}`}
-                >
-                  {submitting ? 'Enrolling…' : 'Enroll device'}
-                </button>
-              </div>
-            </form>
+        {filteredDevices.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            <MonitorSmartphone className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p className="text-lg font-medium mb-2">No devices found</p>
+            <p className="text-sm">
+              {devices.length === 0 
+                ? "No devices discovered on the network" 
+                : "No devices match your search criteria"
+              }
+            </p>
           </div>
-        </div>
-      )}
-    </PageShell>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {filteredDevices.map((device, index) => {
+              const DeviceIcon = getDeviceIcon(device.type)
+              
+              return (
+                <motion.div
+                  key={device.id || index}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="p-4 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className={`${componentStyles.statIcon.base} ${componentStyles.statIcon.neutral} flex-shrink-0`}>
+                        <DeviceIcon className="w-5 h-5" />
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-gray-900 truncate">
+                            {device.name || 'Unknown Device'}
+                          </h3>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(device.status)}`}>
+                            {device.status || 'unknown'}
+                          </span>
+                        </div>
+                        
+                        <div className="space-y-1 text-sm text-gray-600">
+                          <p>IP: <span className="font-mono">{device.ip || 'N/A'}</span></p>
+                          <p>MAC: <span className="font-mono">{device.mac || 'N/A'}</span></p>
+                          <p>Type: {device.type || 'Unknown'}</p>
+                          <p>OS: {device.os || 'Unknown'}</p>
+                        </div>
+
+                        <div className="flex items-center gap-4 mt-3">
+                          <span className={`px-2 py-1 rounded text-xs font-medium border ${getRiskColor(device.risk_level)}`}>
+                            {(device.risk_level || 'unknown').toUpperCase()} RISK
+                          </span>
+                          
+                          <span className={typography.caption}>
+                            Last seen: {formatTimeAgo(device.last_seen)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <button className="p-1 text-gray-400 hover:text-gray-600">
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                  </div>
+                </motion.div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }

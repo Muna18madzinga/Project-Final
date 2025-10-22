@@ -1,479 +1,441 @@
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import {
-  AlertTriangle,
-  BellRing,
-  CheckCircle2,
-  Cpu,
-  Database,
-  Gauge,
-  Inbox,
-  ServerCog,
-  TrendingUp,
-  Users
-} from 'lucide-react'
-import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
-import api from '../services/api'
+import { Activity, Shield, AlertTriangle, Network, Server, Eye, Cpu, Database, Users, TrendingUp } from 'lucide-react'
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { componentStyles, typography, colors } from '../styles/designSystem'
+import api from '../services/api'
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState({
-    totalThreats: 0,
-    blockedThreats: 0,
-    activeSessions: 0,
-    riskScore: 0
-  })
-  const [alertTimeline, setAlertTimeline] = useState([])
-  const [trafficData, setTrafficData] = useState([])
-  const [recentAlerts, setRecentAlerts] = useState([])
-  const [alertDistribution, setAlertDistribution] = useState([])
+  const [stats, setStats] = useState(null)
+  const [systemMetrics, setSystemMetrics] = useState(null)
+  const [threatData, setThreatData] = useState([])
+  const [networkEvents, setNetworkEvents] = useState([])
   const [loading, setLoading] = useState(true)
-  const [exporting, setExporting] = useState(false)
+  const [error, setError] = useState(null)
+  const [lastUpdate, setLastUpdate] = useState(null)
 
   useEffect(() => {
     fetchDashboardData()
-    const interval = setInterval(fetchDashboardData, 10000) // Refresh every 10 seconds
+    const interval = setInterval(fetchDashboardData, 5000) // Update every 5 seconds
     return () => clearInterval(interval)
   }, [])
-
-  const formatTimeAgo = (timestamp) => {
-    try {
-      const date = new Date(timestamp)
-      const seconds = Math.floor((new Date() - date) / 1000)
-
-      if (seconds < 60) return `${seconds} seconds ago`
-      if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`
-      if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`
-      return `${Math.floor(seconds / 86400)} days ago`
-    } catch {
-      return timestamp
-    }
-  }
-
-  const getSeverityStyles = (severity) => {
-    const key = (severity || 'low').toLowerCase()
-    return componentStyles.severity[key] || componentStyles.severity.low
-  }
 
   const fetchDashboardData = async () => {
     try {
       const responses = await Promise.allSettled([
-        api.get('/api/suite/status'),
-        api.get('/api/threats/timeline'),
-        api.get('/api/network/traffic'),
-        api.get('/api/metrics/live'),
-        api.get('/api/threats/recent?limit=12')
+        api.get('/api/dashboard/stats'),
+        api.get('/api/system/metrics'),
+        api.get('/api/threats/recent?limit=10'),
+        api.get('/api/network/events?limit=20')
       ])
 
-      const [suiteStatus, threatTimeline, networkTraffic, liveMetrics, threats] = responses
+      const [statsRes, metricsRes, threatsRes, eventsRes] = responses
 
-      setStats({
-        totalThreats: suiteStatus.value?.data?.metrics?.total_threats_detected || 0,
-        blockedThreats: suiteStatus.value?.data?.metrics?.total_policies_enforced || 0,
-        activeSessions: liveMetrics.value?.data?.active_sessions || 0,
-        riskScore: Math.min(
-          100,
-          Math.max(0, 100 - (suiteStatus.value?.data?.metrics?.total_threats_detected || 0) * 2)
-        )
-      })
-
-      const timeline = (threatTimeline.value?.data || []).map((entry) => ({
-        time: entry.time || entry.hour || entry.label,
-        alerts: entry.threats ?? entry.alerts ?? 0,
-        resolved: entry.blocked ?? entry.resolved ?? 0
-      }))
-      setAlertTimeline(timeline)
-
-      const traffic = networkTraffic.value?.data || {}
-      const timestamp = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-      const incoming = Math.max(0, Math.round((traffic.bytes_recv_per_sec ?? 0) / 1024))
-      const outgoing = Math.max(0, Math.round((traffic.bytes_sent_per_sec ?? 0) / 1024))
-
-      setTrafficData((prev) => [...prev.slice(-23), { time: timestamp, incoming, outgoing }])
-
-      const recent = threats.value?.data || []
-      setRecentAlerts(recent.slice(0, 6))
-
-      if (recent.length) {
-        const severityCounts = recent.reduce(
-          (acc, alert) => {
-            const level = (alert.severity || 'low').toLowerCase()
-            acc[level] = (acc[level] || 0) + 1
-            return acc
-          },
-          { high: 0, medium: 0, low: 0 }
-        )
-        const total = Object.values(severityCounts).reduce((sum, val) => sum + val, 0) || 1
-        setAlertDistribution([
-          { name: 'High severity', value: Math.round((severityCounts.high / total) * 100), color: colors.error },
-          { name: 'Medium', value: Math.round((severityCounts.medium / total) * 100), color: colors.warning },
-          { name: 'Low', value: Math.round((severityCounts.low / total) * 100), color: colors.success }
-        ])
-      } else {
-        setAlertDistribution([
-          { name: 'High severity', value: 10, color: colors.error },
-          { name: 'Medium', value: 30, color: colors.warning },
-          { name: 'Low', value: 60, color: colors.success }
-        ])
+      if (statsRes.status === 'fulfilled') {
+        setStats(statsRes.value.data)
+        setLastUpdate(new Date())
       }
 
-      setLoading(false)
-    } catch (error) {
-      console.error('Failed to fetch dashboard data:', error)
-      setLoading(false)
-    }
-  }
+      if (metricsRes.status === 'fulfilled') {
+        setSystemMetrics(metricsRes.value.data)
+      }
 
-  const handleExportHistory = async () => {
-    try {
-      setExporting(true)
-      const response = await api.get('/api/alerts/history?limit=100')
-      const alerts = response.data?.alerts || []
-      const blob = new Blob([JSON.stringify(alerts, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `alert-history-${Date.now()}.json`
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error('Failed to export alert history:', error)
+      if (threatsRes.status === 'fulfilled') {
+        const threats = threatsRes.value.data.threats || []
+        setThreatData(threats.map((threat, index) => ({
+          time: new Date(threat.timestamp).getHours() + ':' + String(new Date(threat.timestamp).getMinutes()).padStart(2, '0'),
+          threats: index + 1,
+          severity: threat.severity,
+          score: threat.threat_score || 0
+        })))
+      }
+
+      if (eventsRes.status === 'fulfilled') {
+        setNetworkEvents(eventsRes.value.data.events || [])
+      }
+
+      setError(null)
+    } catch (err) {
+      console.error('Dashboard data fetch error:', err)
+      setError('Failed to fetch dashboard data')
     } finally {
-      setExporting(false)
+      setLoading(false)
     }
   }
 
-  const StatCard = ({ icon: Icon, title, value, change, variant = 'primary', isLoading }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ scale: 1.02 }}
-      transition={{ duration: 0.2 }}
-      className={componentStyles.card}
-    >
+  const formatTimeAgo = (timestamp) => {
+    if (!timestamp) return 'Unknown'
+    const now = new Date()
+    const time = new Date(timestamp)
+    const diffMs = now - time
+    const diffMins = Math.floor(diffMs / 60000)
+    
+    if (diffMins < 1) return 'Just now'
+    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`
+    return `${Math.floor(diffMins / 1440)}d ago`
+  }
+
+  const StatCard = ({ icon: Icon, title, value, subtitle, color = 'primary', trend, loading: cardLoading }) => (
+    <div className={componentStyles.card}>
       <div className="flex items-center justify-between">
-        <div>
-          <p className={typography.small + ' mb-1'}>{title}</p>
-          {isLoading ? (
-            <div className="h-8 w-24 bg-gray-200 animate-pulse rounded" />
+        <div className="flex-1">
+          <p className={typography.small}>{title}</p>
+          {cardLoading ? (
+            <div className="h-8 w-24 bg-gray-200 animate-pulse rounded mt-1" />
           ) : (
-            <h3 className="text-3xl font-bold text-gray-900">{value}</h3>
+            <p className={typography.h3}>{value}</p>
           )}
-          {change && (
-            <p className={typography.small + ' text-emerald-600 mt-1 flex items-center gap-1'}>
-              <TrendingUp className="w-4 h-4" />
-              {change}
-            </p>
-          )}
+          <div className="flex items-center gap-2 mt-1">
+            <p className={typography.caption}>{subtitle}</p>
+            {trend && (
+              <span className="flex items-center gap-1 text-green-600 text-xs">
+                <TrendingUp className="w-3 h-3" />
+                {trend}
+              </span>
+            )}
+          </div>
         </div>
-        <div className={`${componentStyles.statIcon.base} ${componentStyles.statIcon[variant]}`}>
+        <div className={`${componentStyles.statIcon.base} ${componentStyles.statIcon[color]}`}>
           <Icon className="w-6 h-6" />
         </div>
       </div>
-    </motion.div>
+    </div>
   )
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className={`${componentStyles.card} bg-red-50 border-red-200`}>
+          <div className="flex items-center gap-3 text-red-700">
+            <AlertTriangle className="w-5 h-5" />
+            <div>
+              <p className="font-medium">Error Loading Dashboard</p>
+              <p className="text-sm">{error}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className={typography.h1}>Operations Overview</h1>
-        <p className={typography.small + ' mt-1'}>Real-time system insights and alert tracking</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className={typography.h1}>Security Dashboard</h1>
+          <p className={typography.small}>
+            Real-time monitoring and threat detection overview
+          </p>
+        </div>
+        <div className="text-right">
+          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs ${
+            stats?.real_data_available 
+              ? 'bg-green-100 text-green-700' 
+              : 'bg-yellow-100 text-yellow-700'
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${
+              stats?.real_data_available ? 'bg-green-500' : 'bg-yellow-500'
+            }`} />
+            {stats?.real_data_available ? 'Live Data' : 'Demo Mode'}
+          </div>
+          {lastUpdate && (
+            <p className={typography.caption + ' mt-1'}>
+              Updated {formatTimeAgo(lastUpdate)}
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* Main Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          icon={BellRing}
-          title="Total Alerts"
-          value={stats.totalThreats}
-          change="+12% vs last week"
-          variant="primary"
-          isLoading={loading}
+          icon={Network}
+          title="Network Packets"
+          value={stats?.network?.packets_captured?.toLocaleString() || '0'}
+          subtitle={`${stats?.network?.packets_per_second?.toFixed(1) || '0'} pps`}
+          color="primary"
+          loading={loading}
+          trend="+12%"
         />
         <StatCard
-          icon={CheckCircle2}
-          title="Resolved Alerts"
-          value={stats.blockedThreats}
-          change="+8% efficiency"
-          variant="success"
-          isLoading={loading}
+          icon={Shield}
+          title="Threat Indicators"
+          value={stats?.threats?.total_indicators?.toLocaleString() || '0'}
+          subtitle={`${stats?.threats?.threat_matches || 0} active matches`}
+          color="accent"
+          loading={loading}
         />
         <StatCard
-          icon={Users}
-          title="Active Sessions"
-          value={stats.activeSessions}
-          variant="accent"
-          isLoading={loading}
+          icon={AlertTriangle}
+          title="High Risk Events"
+          value={stats?.threats?.high_risk_events?.toString() || '0'}
+          subtitle="Requires attention"
+          color="success"
+          loading={loading}
         />
         <StatCard
-          icon={Gauge}
-          title="Stability Score"
-          value={`${stats.riskScore}%`}
-          change="Consistent"
-          variant="neutral"
-          isLoading={loading}
+          icon={Activity}
+          title="Events Processed"
+          value={stats?.telemetry?.events_processed?.toLocaleString() || '0'}
+          subtitle={`${stats?.telemetry?.threat_events || 0} threat events`}
+          color="neutral"
+          loading={loading}
         />
+      </div>
+
+      {/* System Health Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className={componentStyles.card}>
+          <div className="flex items-center gap-4">
+            <div className={`${componentStyles.statIcon.base} ${componentStyles.statIcon.primary}`}>
+              <Cpu className="w-6 h-6" />
+            </div>
+            <div className="flex-1">
+              <p className={typography.small}>CPU Usage</p>
+              <p className={typography.h4}>
+                {systemMetrics?.cpu_percent?.toFixed(1) || '0'}%
+              </p>
+              <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                  style={{ width: `${Math.min(100, systemMetrics?.cpu_percent || 0)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={componentStyles.card}>
+          <div className="flex items-center gap-4">
+            <div className={`${componentStyles.statIcon.base} ${componentStyles.statIcon.success}`}>
+              <Database className="w-6 h-6" />
+            </div>
+            <div className="flex-1">
+              <p className={typography.small}>Memory Usage</p>
+              <p className={typography.h4}>
+                {systemMetrics?.memory_percent?.toFixed(1) || '0'}%
+              </p>
+              <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                <div 
+                  className="bg-green-600 h-2 rounded-full transition-all duration-300" 
+                  style={{ width: `${Math.min(100, systemMetrics?.memory_percent || 0)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={componentStyles.card}>
+          <div className="flex items-center gap-4">
+            <div className={`${componentStyles.statIcon.base} ${componentStyles.statIcon.neutral}`}>
+              <Users className="w-6 h-6" />
+            </div>
+            <div className="flex-1">
+              <p className={typography.small}>Active Connections</p>
+              <p className={typography.h4}>
+                {systemMetrics?.active_connections?.toLocaleString() || '0'}
+              </p>
+              <p className={typography.caption}>
+                {systemMetrics?.processes_count || '0'} processes
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Alert Timeline */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className={componentStyles.card}
-        >
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className={typography.h3}>Alert Activity</h2>
-              <p className={typography.small}>Last 24 hours</p>
-            </div>
-            <div className="flex gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: colors.error }}
-                />
-                <span>Alerts</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: colors.success }}
-                />
-                <span>Resolved</span>
-              </div>
-            </div>
+        {/* Threat Timeline */}
+        <div className={componentStyles.card}>
+          <div className="mb-6">
+            <h3 className={typography.h3}>Threat Activity</h3>
+            <p className={typography.small}>Recent threat detection timeline</p>
           </div>
           <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={alertTimeline}>
+            <AreaChart data={threatData}>
               <defs>
-                <linearGradient id="colorAlerts" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="threatGradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={colors.error} stopOpacity={0.3} />
                   <stop offset="95%" stopColor={colors.error} stopOpacity={0} />
                 </linearGradient>
-                <linearGradient id="colorResolved" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={colors.success} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={colors.success} stopOpacity={0} />
-                </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="time" stroke="#9ca3af" />
-              <YAxis stroke="#9ca3af" />
+              <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} />
+              <YAxis stroke="#9ca3af" fontSize={12} />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: '#ffffff',
+                  backgroundColor: 'white',
                   border: '1px solid #e5e7eb',
-                  borderRadius: '0.5rem'
+                  borderRadius: '8px',
+                  fontSize: '12px'
                 }}
-                formatter={(value, name) => [
-                  value,
-                  name === 'alerts' ? 'Alerts' : 'Resolved'
-                ]}
-                labelFormatter={(label) => `Hour ${label}`}
               />
               <Area
                 type="monotone"
-                dataKey="alerts"
+                dataKey="threats"
                 stroke={colors.error}
                 strokeWidth={2}
                 fillOpacity={1}
-                fill="url(#colorAlerts)"
-                name="Alerts"
-              />
-              <Area
-                type="monotone"
-                dataKey="resolved"
-                stroke={colors.success}
-                strokeWidth={2}
-                fillOpacity={1}
-                fill="url(#colorResolved)"
-                name="Resolved"
+                fill="url(#threatGradient)"
               />
             </AreaChart>
           </ResponsiveContainer>
-        </motion.div>
+        </div>
 
-        {/* Alert Distribution */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className={componentStyles.card}
-        >
+        {/* Network Traffic */}
+        <div className={componentStyles.card}>
           <div className="mb-6">
-            <h2 className={typography.h3}>Alert Distribution</h2>
-            <p className={typography.small}>By category</p>
+            <h3 className={typography.h3}>Network Interface</h3>
+            <p className={typography.small}>
+              Interface: {stats?.network?.interface || 'Not detected'}
+            </p>
           </div>
-          <div className="flex items-center justify-between">
-            <ResponsiveContainer width="50%" height={200}>
-              <PieChart>
-                <Pie
-                  data={alertDistribution}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {alertDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="space-y-3">
-              {alertDistribution.map((item, index) => (
-                <div key={index} className="flex items-center gap-3">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <span className="text-sm text-gray-700 flex-1">{item.name}</span>
-                  <span className="text-sm font-semibold text-gray-900">{item.value}%</span>
-                </div>
-              ))}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div>
+                <p className="font-medium">Data Transfer</p>
+                <p className={typography.caption}>Bytes sent/received</p>
+              </div>
+              <div className="text-right">
+                <p className="font-mono text-sm">
+                  ↑ {((systemMetrics?.network_bytes_sent || 0) / 1024 / 1024).toFixed(1)}MB
+                </p>
+                <p className="font-mono text-sm">
+                  ↓ {((systemMetrics?.network_bytes_recv || 0) / 1024 / 1024).toFixed(1)}MB
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div>
+                <p className="font-medium">Active Flows</p>
+                <p className={typography.caption}>Current connections</p>
+              </div>
+              <p className="text-2xl font-bold">
+                {stats?.network?.active_flows || '0'}
+              </p>
             </div>
           </div>
-        </motion.div>
+        </div>
       </div>
 
-      {/* Network Traffic Chart */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className={componentStyles.card}
-      >
-        <div className="mb-6">
-          <h2 className={typography.h3}>Network Traffic Volume</h2>
-          <p className={typography.small}>Real-time incoming and outgoing traffic (KB/s)</p>
-        </div>
-        <ResponsiveContainer width="100%" height={250}>
-          <LineChart data={trafficData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="time" stroke="#9ca3af" />
-            <YAxis stroke="#9ca3af" />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '0.5rem'
-              }}
-              formatter={(value, name) => [`${value} KB/s`, name]}
-            />
-            <Legend />
-            <Line
-              type="monotone"
-              dataKey="incoming"
-              stroke={colors.primary[500]}
-              strokeWidth={2}
-              name="Incoming"
-            />
-            <Line
-              type="monotone"
-              dataKey="outgoing"
-              stroke={colors.primary[700]}
-              strokeWidth={2}
-              name="Outgoing"
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </motion.div>
-
-      {/* Recent Alerts */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className={componentStyles.card}
-      >
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className={typography.h3}>Recent Alerts</h2>
-            <p className={typography.small}>Latest events from the monitoring service</p>
+      {/* Recent Events Tables */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Network Events */}
+        <div className={componentStyles.card}>
+          <div className="mb-6">
+            <h3 className={typography.h3}>Recent Network Activity</h3>
+            <p className={typography.small}>Latest network connections</p>
           </div>
-          <button
-            onClick={handleExportHistory}
-            disabled={exporting}
-            className={`${componentStyles.button.base} ${componentStyles.button.secondary} text-sm`}
-          >
-            View history
-          </button>
-        </div>
-        <div className="space-y-4">
-          {recentAlerts.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <Inbox className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>No recent alerts</p>
-              <p className="text-sm">Everything looks calm right now</p>
-            </div>
-          ) : (
-            recentAlerts.map((alert, index) => {
-              const severityStyles = getSeverityStyles(alert.severity)
-              const status = (alert.status || 'monitoring').replace('_', ' ')
-
-              return (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:border-gray-200 transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                  <div className={`p-3 rounded-lg border ${severityStyles.border} ${severityStyles.bg}`}>
-                      <AlertTriangle className={`w-5 h-5 ${severityStyles.icon}`} />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">{alert.type}</p>
-                      <p className="text-sm text-gray-600">
-                        {alert.ip} - {formatTimeAgo(alert.time)}
-                      </p>
-                    </div>
+          <div className="space-y-3">
+            {networkEvents.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Network className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p>No recent network activity</p>
+              </div>
+            ) : (
+              networkEvents.slice(0, 5).map((event, index) => (
+                <div key={index} className="flex items-center justify-between p-3 rounded-lg border border-gray-100">
+                  <div className="flex-1">
+                    <p className="font-mono text-sm">
+                      {event.source_ip}:{event.source_port} → {event.dest_ip}:{event.dest_port}
+                    </p>
+                    <p className={typography.caption}>
+                      {event.protocol?.toUpperCase()} • {event.packet_size} bytes • {formatTimeAgo(event.timestamp)}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`${componentStyles.badge.base} ${
-                        status.toLowerCase() === 'blocked'
-                          ? componentStyles.badge.success
-                          : componentStyles.badge.info
-                      }`}
-                    >
-                      {status}
-                    </span>
+                  {event.threat_score > 0.5 && (
+                    <div className={`${componentStyles.badge.base} ${componentStyles.badge.warning}`}>
+                      Risk: {(event.threat_score * 100).toFixed(0)}%
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* System Status */}
+        <div className={componentStyles.card}>
+          <div className="mb-6">
+            <h3 className={typography.h3}>System Status</h3>
+            <p className={typography.small}>Component health overview</p>
+          </div>
+          <div className="space-y-4">
+            {[
+              {
+                name: 'Network Monitoring',
+                status: stats?.network?.interface ? 'online' : 'offline',
+                details: stats?.network?.interface || 'No interface detected'
+              },
+              {
+                name: 'Threat Intelligence',
+                status: (stats?.threats?.total_indicators || 0) > 0 ? 'online' : 'offline',
+                details: `${stats?.threats?.total_indicators || 0} indicators loaded`
+              },
+              {
+                name: 'Telemetry Pipeline',
+                status: (stats?.telemetry?.events_processed || 0) > 0 ? 'online' : 'offline',
+                details: `${stats?.telemetry?.events_processed || 0} events processed`
+              },
+              {
+                name: 'Real Data Collection',
+                status: stats?.real_data_available ? 'online' : 'simulation',
+                details: stats?.real_data_available ? 'Live data active' : 'Demo mode active'
+              }
+            ].map((component, index) => (
+              <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-gray-50">
+                <div className="flex items-center gap-3">
+                  <div className={`w-3 h-3 rounded-full ${
+                    component.status === 'online' ? 'bg-green-400' :
+                    component.status === 'simulation' ? 'bg-yellow-400' : 'bg-gray-400'
+                  }`} />
+                  <div>
+                    <p className="font-medium text-sm">{component.name}</p>
+                    <p className={typography.caption}>{component.details}</p>
                   </div>
                 </div>
-              )
-            })
-          )}
+                <span className={`${componentStyles.badge.base} ${
+                  component.status === 'online' ? componentStyles.badge.success :
+                  component.status === 'simulation' ? componentStyles.badge.warning : componentStyles.badge.neutral
+                }`}>
+                  {component.status.toUpperCase()}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
-      </motion.div>
+      </div>
 
-      {/* System Status */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {[
-          { label: 'Processing Nodes', value: 'Online', icon: ServerCog, color: 'text-emerald-600' },
-          { label: 'Data Pipeline', value: 'Stable', icon: Database, color: 'text-blue-600' },
-          { label: 'Compute Usage', value: '64%', icon: Cpu, color: 'text-indigo-600' }
-        ].map((item, index) => (
-          <motion.div
-            key={index}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 + index * 0.1 }}
-            className="bg-white rounded-xl p-4 shadow border border-gray-100 flex items-center gap-4"
-          >
-            <item.icon className={`w-6 h-6 ${item.color}`} />
+      {/* Data Mode Alert */}
+      {!loading && stats && (
+        <div className={`${componentStyles.card} ${
+          stats.real_data_available 
+            ? 'bg-green-50 border-green-200' 
+            : 'bg-yellow-50 border-yellow-200'
+        }`}>
+          <div className="flex items-center gap-3">
+            <Eye className={`w-5 h-5 ${
+              stats.real_data_available ? 'text-green-600' : 'text-yellow-600'
+            }`} />
             <div>
-              <p className="text-sm text-gray-600">{item.label}</p>
-              <p className="font-semibold text-gray-900">{item.value}</p>
+              <p className={`font-medium ${
+                stats.real_data_available ? 'text-green-900' : 'text-yellow-900'
+              }`}>
+                {stats.real_data_available ? 'Live Data Collection Active' : 'Demo Mode Active'}
+              </p>
+              <p className={`text-sm ${
+                stats.real_data_available ? 'text-green-700' : 'text-yellow-700'
+              }`}>
+                {stats.real_data_available 
+                  ? 'System is collecting real network traffic and threat intelligence from live sources'
+                  : 'System is running with simulated data for demonstration purposes. Install real data components for live monitoring.'
+                }
+              </p>
             </div>
-          </motion.div>
-        ))}
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
