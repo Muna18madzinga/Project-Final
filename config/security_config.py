@@ -23,7 +23,8 @@ SECURITY_CONFIG = {
     
     # Whitelisted IPs (never blocked)
     'whitelisted_ips': [
-        '127.0.0.1',  # Localhost
+        '127.0.0.1',
+        'http://localhost:3002'  # Localhost
         '::1',        # IPv6 localhost
     ],
     
@@ -69,7 +70,8 @@ API_SECURITY = {
     'require_https': True,
     'cors_allowed_origins': [
         'https://yourdomain.com',
-        'http://localhost:3000'  # For development
+        'http://localhost:3000',
+        'http://localhost:3002'  # For development
     ]
 }
 

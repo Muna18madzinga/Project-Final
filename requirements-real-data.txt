@@ -2,20 +2,20 @@
 # Dependencies for live data collection and threat intelligence feeds
 
 # Network packet capture and analysis
-scapy>=2.5.0
-netifaces>=0.11.0
-psutil>=5.9.0
+scapy
+netifaces
+psutil
 
 # HTTP requests for threat intel feeds
-requests>=2.31.0
-urllib3>=1.26.0
+requests
+urllib3
 
 # Data processing
-pandas>=2.0.0
-numpy>=1.24.0
+pandas
+numpy
 
 # Async support
-asyncio-mqtt>=0.13.0
+asyncio-mqtt
 aiohttp>=3.8.0
 
 # IP address handling
