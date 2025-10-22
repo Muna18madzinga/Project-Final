@@ -1,0 +1,16 @@
+Using derived encryption key. Set ENCRYPTION_KEY environment variable for production.
+Generated new master key. Store securely: MASTER_ENCRYPTION_KEY=oge8pbxFmy/90WYXnYo52+39mtF7w1P8ZEvYRWz2qcY=
+C:\Users\user\Desktop\project-main\.venv\Lib\site-packages\scapy\layers\ipsec.py:512: CryptographyDeprecationWarning: TripleDES has been moved to cryptography.hazmat.decrepit.ciphers.algorithms.TripleDES and will be removed from cryptography.hazmat.primitives.ciphers.algorithms in 48.0.0.
+  cipher=algorithms.TripleDES,
+C:\Users\user\Desktop\project-main\.venv\Lib\site-packages\scapy\layers\ipsec.py:516: CryptographyDeprecationWarning: TripleDES has been moved to cryptography.hazmat.decrepit.ciphers.algorithms.TripleDES and will be removed from cryptography.hazmat.primitives.ciphers.algorithms in 48.0.0.
+  cipher=algorithms.TripleDES,
+C:\Users\user\Desktop\project-main\.venv\Lib\site-packages\flask_limiter\_extension.py:364: UserWarning: Using the in-memory storage for tracking rate limits as no storage was explicitly specified. This is not recommended for production use. See: https://flask-limiter.readthedocs.io#configuring-a-storage-backend for documentation about configuring the storage backend.
+  warnings.warn(
+10/21/2025 19:14:01:INFO:WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+10/21/2025 19:14:01:INFO:Press CTRL+C to quit
+forrtl: error (200): program aborting due to window-CLOSE event
+Image              PC                Routine            Line        Source             
+KERNELBASE.dll     00007FFEE2BCC1BD  Unknown               Unknown  Unknown
+KERNEL32.DLL       00007FFEE42CE8D7  Unknown               Unknown  Unknown
+ntdll.dll          00007FFEE568C53C  Unknown               Unknown  Unknown

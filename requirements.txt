@@ -1,0 +1,66 @@
+# Core Framework (Flask-based web application)
+Flask==2.3.3
+bcrypt==4.0.1
+cryptography==41.0.3
+flask-sqlalchemy==3.0.5
+flask-jwt-extended==4.5.2
+flask-migrate==4.0.5
+pyotp==2.9.0
+qrcode==7.4.2
+pillow==10.0.0
+authlib==1.2.1
+requests==2.31.0
+flask-oauthlib==0.9.6
+PyJWT==2.8.0
+python-dotenv==1.0.0
+flask-cors==4.0.0
+flask-limiter==3.5.0
+marshmallow==3.20.1
+werkzeug==2.3.7
+
+# Chapter 3 Software Requirements - Programming Frameworks and Languages
+# Python 3.12 as preferred development language with ML libraries
+numpy==1.26.0        # Numerical operations and array manipulation
+pandas==2.2.0        # Data manipulation and analysis
+scikit-learn==1.5.0  # Basic ML algorithms (classification, clustering)
+torch==2.4.0         # PyTorch for DL model development and training
+tensorflow==2.17.0   # TensorFlow for distributed training (hybrid models)
+
+# Advanced ML and Security Libraries
+opacus==1.4.0        # Differential privacy for PyTorch
+deap==1.4.1          # Genetic algorithms for evolutionary optimization (Python 3.13 compatible)
+transformers==4.44.0 # Hugging Face Transformers for pre-trained models
+foolbox==3.4.0       # Adversarial attack simulation on ML models
+optuna==3.6.0        # Hyperparameter optimization
+
+# Network and Security Tools (Software-based)
+# zeek==6.1.0        # Network traffic monitoring (commented - complex install)
+# suricata==7.0.0    # Rule-based intrusion detection (commented - complex install)
+scapy==2.5.0        # Packet emulation for dataset augmentation
+
+# Data Handling and Simulation
+jupyterlab==4.2.0   # Interactive prototyping and experimentation
+# docker==27.1.0     # Containerization (use system Docker)
+# kafka-python==2.0.2  # Apache Kafka streaming data handling
+
+# MLM-Specific Tools
+tensorboard==2.17.0  # Training metrics visualization
+mlflow==2.15.0       # Experiment tracking and model versioning
+
+# Additional dependencies for advanced adaptive security (2024-2025)
+scipy>=1.10.0        # Scientific computing
+matplotlib>=3.7.0    # Visualization of threat patterns
+seaborn>=0.12.0      # Advanced threat analytics
+pytest>=7.4.0       # Testing framework
+joblib>=1.3.0        # Model persistence
+
+# New Security Features (Phase 1 Implementation)
+pyotp==2.9.0         # TOTP for MFA (already included above)
+qrcode[pil]==7.4.2   # QR code generation for MFA
+user-agents==2.2.0   # User agent parsing for device fingerprinting
+geoip2==4.8.0        # GeoIP location analysis
+maxminddb==2.6.0     # MaxMind database reader
+psycopg2-binary==2.9.9  # PostgreSQL adapter for production DB
+redis==5.0.1         # Redis for caching and session management
+gunicorn==21.2.0     # Production WSGI server
+prometheus-client==0.19.0  # Metrics and monitoring

@@ -1,0 +1,3 @@
+resp = requests.post('http://127.0.0.1:5000/auth/login', json={'username': 'Theo_Madzinga', 'password': 'Theo@1172025'}
+print(resp.status_code
+print(resp.text
