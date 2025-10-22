@@ -1,0 +1,92 @@
+# Real Data Integration Requirements
+# Dependencies for live data collection and threat intelligence feeds
+
+# Network packet capture and analysis
+scapy>=2.5.0
+netifaces>=0.11.0
+psutil>=5.9.0
+
+# HTTP requests for threat intel feeds
+requests>=2.31.0
+urllib3>=1.26.0
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Async support
+asyncio-mqtt>=0.13.0
+aiohttp>=3.8.0
+
+# IP address handling
+ipaddress>=1.0.23
+python-geoip2>=4.7.0
+
+# Date/time handling
+python-dateutil>=2.8.0
+
+# JSON handling
+ujson>=5.7.0
+
+# Configuration management
+python-dotenv>=1.0.0
+pyyaml>=6.0
+
+# Cryptographic operations
+cryptography>=41.0.0
+hashlib2>=1.0.4
+
+# Process monitoring
+py-cpuinfo>=9.0.0
+
+# Network protocols
+dpkt>=1.9.8
+pypcap>=1.2.3
+
+# Threat intelligence APIs
+threatintel>=1.0.0
+otx-python-sdk>=1.5.12
+
+# XML processing for feeds
+lxml>=4.9.0
+beautifulsoup4>=4.12.0
+
+# Database for caching
+sqlite3  # Built into Python
+sqlalchemy>=2.0.0
+
+# Logging enhancements
+colorlog>=6.7.0
+loguru>=0.7.0
+
+# Performance monitoring
+memory-profiler>=0.61.0
+line-profiler>=4.1.0
+
+# Optional: MaxMind GeoIP2 database
+# Download from https://dev.maxmind.com/geoip/geoip2/geolite2/
+# geoip2>=4.7.0
+
+# Optional: YARA rules engine for malware detection
+# yara-python>=4.3.0
+
+# Optional: Snort/Suricata rule parsing
+# idstools>=0.6.4
+
+# Development and testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.11.0
+coverage>=7.3.0
+
+# Network testing utilities
+netaddr>=0.9.0
+python-nmap>=0.7.1
+
+# Performance optimization
+cython>=3.0.0
+numba>=0.58.0
+
+# Optional: For advanced network analysis
+# wireshark-python>=0.1.0  # If available
+# tshark>=0.1.0            # If available
