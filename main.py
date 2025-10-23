@@ -52,8 +52,8 @@ app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 CORS(app, origins=['http://localhost:3000', 'http://localhost:5173', 'http://localhost:3002'])
 jwt = JWTManager(app)
 limiter = Limiter(
-    app,
-    key_func=get_remote_address,
+    get_remote_address,
+    app=app,
     default_limits=["200 per day", "50 per hour"]
 )
 
@@ -443,28 +443,29 @@ def get_system_metrics():
 @app.route('/api/devices', methods=['GET'])
 @jwt_required()
 def get_devices():
-    """Get network devices."""
+    """Get network devices using multi-method discovery with full network scanning."""
     try:
-        # Simulated device data
-        import random
-        from uuid import uuid4
-        
-        devices = []
-        device_types = ['desktop', 'laptop', 'server', 'router', 'switch', 'printer', 'mobile']
-        statuses = ['online', 'offline', 'warning']
-        
-        for i in range(random.randint(5, 15)):
-            devices.append({
-                'id': str(uuid4()),
-                'name': f'Device-{i+1}',
-                'ip': f'192.168.1.{random.randint(1, 254)}',
-                'mac': ':'.join([f'{random.randint(0, 255):02x}' for _ in range(6)]),
-                'type': random.choice(device_types),
-                'status': random.choice(statuses),
-                'last_seen': (datetime.now() - timedelta(minutes=random.randint(1, 1440))).isoformat(),
-                'risk_level': random.choice(['low', 'medium', 'high']),
-                'os': random.choice(['Windows 11', 'macOS', 'Linux', 'Android', 'iOS', 'Unknown'])
-            })
+        from app.utils.network_device_discovery import get_device_discovery
+
+        # Get query parameters
+        scan = request.args.get('scan', 'true').lower() == 'true'  # Default to TRUE for full scan
+        methods_param = request.args.get('methods', 'arp,ping')  # Default: ARP + Ping for full discovery
+        methods = methods_param.split(',')
+
+        device_discovery = get_device_discovery()
+
+        if scan:
+            # Perform full network scan with ARP + Ping to discover ALL devices
+            logger.info(f"Performing FULL network scan with methods: {methods}")
+            devices = device_discovery.discover_devices(methods=methods)
+        else:
+            # Return cached devices
+            devices = device_discovery.get_cached_devices()
+
+            # If no cached devices, perform a full scan
+            if not devices:
+                logger.info("No cached devices, performing full network scan with ARP + Ping")
+                devices = device_discovery.discover_devices(methods=['arp', 'ping'])
         
         return jsonify({
             'devices': devices,
